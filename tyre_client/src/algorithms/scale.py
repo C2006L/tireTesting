@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-实验2-1：图像缩放 —— 双线性插值法
-由MATLAB实验代码翻译而来
-"""
 
 import numpy as np
 
 
 def Scale(input_img, sx, sy):
     """
-    图像缩放 —— 双线性插值法
+    图像缩放 —— 双线性插值法（把图像放大或缩小，用周围4个像素加权平均填补新像素。）
 
     参数:
         input_img: 输入图像 (numpy数组, H×W×C, uint8)

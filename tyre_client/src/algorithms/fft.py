@@ -4,15 +4,7 @@ import math
 
 
 def fft2d(image):
-    """
-    二维傅立叶变换（空域→频域）
-
-    参数:
-        image: 输入图像(numpy数组, HxW, 灰度图)
-
-    返回:
-        F: 频域复数矩阵
-    """
+    """二维FFT: F(u,v) = ΣΣ f(x,y)·e^(-j2π(ux/H+vy/W))"""
     H, W = image.shape
     F = np.zeros((H, W), dtype=np.complex128)
 
@@ -29,15 +21,7 @@ def fft2d(image):
 
 
 def ifft2d(F):
-    """
-    二维傅立叶逆变换（频域→空域）
-
-    参数:
-        F: 频域复数矩阵
-
-    返回:
-        image: 空域图像(numpy数组, HxW)
-    """
+    """二维IFFT: f(x,y) = (1/HW)·ΣΣ F(u,v)·e^(j2π(ux/H+vy/W))"""
     H, W = F.shape
     image = np.zeros((H, W), dtype=np.float64)
 
@@ -54,15 +38,7 @@ def ifft2d(F):
 
 
 def fft_shift(F):
-    """
-    频谱移中（将低频移到中心）
-
-    参数:
-        F: 频域复数矩阵
-
-    返回:
-        F_shifted: 移中后的频域矩阵
-    """
+    """频谱移中: 低频从左上角移到中心"""
     H, W = F.shape
     F_shifted = np.zeros_like(F)
 
@@ -76,15 +52,7 @@ def fft_shift(F):
 
 
 def ifft_shift(F_shifted):
-    """
-    频谱移回（将中心低频移回原点）
-
-    参数:
-        F_shifted: 移中后的频域矩阵
-
-    返回:
-        F: 原始频域矩阵
-    """
+    """频谱移回: 中心低频移回左上角"""
     H, W = F_shifted.shape
     F = np.zeros_like(F_shifted)
 
@@ -98,16 +66,7 @@ def ifft_shift(F_shifted):
 
 
 def create_sine_wave(H, W, freq_x, freq_y):
-    """
-    生成正弦波形图像
-
-    参数:
-        H, W: 图像高宽
-        freq_x, freq_y: X/Y方向频率
-
-    返回:
-        image: 正弦波图像
-    """
+    """生成正弦波: 128+127·sin(2π(freq_x·x/H+freq_y·y/W))"""
     image = np.zeros((H, W), dtype=np.float64)
     for x in range(H):
         for y in range(W):
@@ -116,18 +75,10 @@ def create_sine_wave(H, W, freq_x, freq_y):
 
 
 def combine_waves(wave_list):
-    """
-    组合多个波形
-
-    参数:
-        wave_list: 波形列表[(wave, weight), ...]
-
-    返回:
-        combined: 组合后的图像
-    """
+    """叠加多个波形: Σ(weight_i × wave_i)"""
     H, W = wave_list[0][0].shape
     combined = np.zeros((H, W), dtype=np.float64)
     for wave, weight in wave_list:
-        combined += wave * weight
+        combined += weight * wave
     combined = np.clip(combined, 0, 255)
     return combined

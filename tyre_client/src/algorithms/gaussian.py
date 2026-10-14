@@ -4,7 +4,7 @@
 import numpy as np
 import math
 
-
+#一维高斯核函数
 def gaussian_kernel_1d(sigma, size):
     center = size // 2
     x = np.arange(-center, center + 1, dtype=np.float64)
@@ -12,7 +12,7 @@ def gaussian_kernel_1d(sigma, size):
     kernel = kernel / kernel.sum()
     return kernel
 
-
+#一维卷积函数
 def convolve_1d(image, kernel, axis):
     r = len(kernel) // 2
     output = np.zeros_like(image, dtype=np.float64)
@@ -36,7 +36,7 @@ def convolve_1d(image, kernel, axis):
 
     return output
 
-
+#高斯滤波函数
 def Gaussian(input_img, sigma):
     input_arr = np.array(input_img, dtype=np.float64)
 
