@@ -14,7 +14,7 @@ def main():
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.normpath(os.path.join(script_dir, '..', '..'))
-    lab2_img = os.path.join('D:', '2026第二学期', '2026数媒数字图像处理实验说明', 'Pset4_Fourier and Frequency domain Filtering', '实验4提供的图像', 'house.png')
+    lab2_img = os.path.join('D:', '2026第二学期', '2026数媒数字图像处理实验说明', 'Pset4_Fourier and Frequency domain Filtering', '实验4提供的图像', 'building-600by600.tif')
     default_img = os.path.join(project_root, 'static', 'imgs', 'test0', '1.bmp')
 
     img_path = sys.argv[1] if len(sys.argv) > 1 else lab2_img
