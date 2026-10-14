@@ -21,7 +21,8 @@ def main():
     project_root = os.path.normpath(os.path.join(script_dir, '..', '..'))
     default_img = os.path.join(project_root, 'static', 'imgs', 'test0', '1.bmp')
     lab2_img = os.path.join('D:', os.sep, '2026第二学期', '2026数媒数字图像处理实验说明',
-                            'Pset2_Geometry and Calibration', '提供图像', 'lab2.png')
+                            'Pset1_Deployment of real-time monitoring system for tire defects',
+                            'Tire testing', '实验3提供图像', '3-1', 'a.jpg')
 
     img_path = sys.argv[1] if len(sys.argv) > 1 else lab2_img
 
