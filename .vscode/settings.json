@@ -1,0 +1,10 @@
+{
+  "python.analysis.extraPaths": [
+    "./tyre_client/src",
+    "./tyre_client/src/algorithms"
+  ],
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none",
+    "reportMissingModuleSource": "none"
+  }
+}

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# pylint: disable=invalid-name
 """
 轮胎缺陷检测算法模板
 用于实现具体的检测算法逻辑

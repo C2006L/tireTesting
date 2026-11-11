@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=invalid-name
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
