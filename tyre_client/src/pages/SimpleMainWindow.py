@@ -71,13 +71,26 @@ class BatchDetectionThread(QThread):
                 
                 try:
                     # 执行检测
+                    result_path = ""
                     if self.detector and DETECTION_AVAILABLE:
                         result_image, detection_info = self.detector.process_image(image_path)
+                        # 把带缺陷标记的结果图像保存为临时文件，供界面显示（否则界面会显示原图）
+                        if result_image is not None:
+                            try:
+                                import tempfile
+                                from PIL import Image
+                                tmp_dir = os.path.join(tempfile.gettempdir(), 'tire_detect_result')
+                                os.makedirs(tmp_dir, exist_ok=True)
+                                result_path = os.path.join(tmp_dir, os.path.basename(image_path))
+                                Image.fromarray(result_image.astype('uint8')).save(result_path)
+                            except Exception as e:
+                                print(f"保存结果图像失败: {e}")
+                                result_path = ""
                     else:
                         result_image, detection_info = self.simulate_detection(image_path)
-                    
-                    # 发送结果
-                    self.imageProcessed.emit(image_path, "", detection_info)
+
+                    # 发送结果（第二个参数为带缺陷标记的结果图像路径）
+                    self.imageProcessed.emit(image_path, result_path, detection_info)
                     success_count += 1
                     
                     # 添加延时以便观察结果
@@ -195,6 +208,7 @@ class SimpleMainWindowPage(FlexiableLayoutWindow):
     total_images = 0
     processed_images = 0
     success_count = 0
+    defect_image_count = 0  # 检出缺陷的图像张数
 
     def __init__(self):
         # 主窗口尺寸
@@ -402,6 +416,7 @@ class SimpleMainWindowPage(FlexiableLayoutWindow):
             self.imgCheckCounter = 1
             self.processed_images = 0
             self.success_count = 0
+            self.defect_image_count = 0  # 重置检出缺陷计数
             
             # 开始批量检测
             self.startBatchDetection(folder_path)
@@ -460,6 +475,9 @@ class SimpleMainWindowPage(FlexiableLayoutWindow):
             # 更新成功计数
             if detection_info['result'] != 2:  # 不是检测失败
                 self.success_count += 1
+            # 统计检出缺陷的图像张数
+            if detection_info.get('defect_count', 0) > 0:
+                self.defect_image_count += 1
             
             self.processed_images += 1
             
@@ -481,18 +499,19 @@ class SimpleMainWindowPage(FlexiableLayoutWindow):
         
         completion_msg = f"批量检测完成！\n" \
                         f"总计: {total_count} 张图像\n" \
-                        f"成功: {success_count} 张\n" \
-                        f"失败: {total_count - success_count} 张"
+                        f"检出缺陷: {self.defect_image_count} 张\n" \
+                        f"处理成功: {success_count} 张\n" \
+                        f"处理失败: {total_count - success_count} 张"
         
         self.showAlertWindow(completion_msg)
         
-        # 更新最终状态
-        final_result = 1 if success_count == total_count else 0
+        # 更新最终状态：有检出缺陷 -> "检测不通过"，否则 "检测通过"
+        final_result = 0 if self.defect_image_count > 0 else 1
         self.updateCheckInfoPanel(
             False, 
             True, 
             final_result, 
-            f"批量检测完成 ({success_count}/{total_count})"
+            f"批量检测完成 ({success_count}/{total_count})，检出缺陷 {self.defect_image_count} 张"
         )
     
     def onBatchError(self, error_message):
