@@ -32,7 +32,7 @@ def add_salt_pepper_noise(image, p=0.05, seed=None):
 
 
 def compute_histogram(image, bins=256):
-    """灰度直方图: 返回每个灰度级的像素个数"""
+    """灰度直方图: 返回0~255每个灰度级的像素个数"""
     img = np.array(image)
     hist, _ = np.histogram(img.ravel(), bins=bins, range=(0, bins))
     return hist

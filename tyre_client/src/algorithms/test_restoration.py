@@ -58,8 +58,8 @@ def main():
 
     # 分别生成三种噪声图像
     np.random.seed(42)  # 固定随机种子，保证结果可复现
-    noisy_gauss = add_gaussian_noise(img_51, mean=0, sigma=25)
-    noisy_rayleigh = add_rayleigh_noise(img_51, sigma=30)
+    noisy_gauss = add_gaussian_noise(img_51, mean=0, sigma=15)
+    noisy_rayleigh = add_rayleigh_noise(img_51, sigma=20)
     noisy_sp = add_salt_pepper_noise(img_51, pa=0.05, pb=0.05)
 
     # 计算各噪声图像的直方图（按顺序存放，方便与图像一一对应）
@@ -80,22 +80,43 @@ def main():
     print(f"    噪声图像已保存到: {output_dir}")
 
     # 绘图：上排为图像，下排为对应直方图
-    fig, axes = plt.subplots(2, 4, figsize=(18, 9))
-    fig.suptitle('Experiment 5-1: Noise Generation & Histograms', fontsize=15)
+    fig, axes = plt.subplots(2, 4, figsize=(18, 9), facecolor='black')
+    fig.suptitle('Experiment 5-1: Noise Generation & Histograms', fontsize=15, color='white')
 
     imgs = [img_51, noisy_gauss, noisy_rayleigh, noisy_sp]
     names = ['Original', 'Gaussian Noise', 'Rayleigh Noise', 'Salt & Pepper']
+
+    def _norm_hist(h, bins=64):
+        """
+        统计灰度直方图并归一化：
+          - 以"中间区域的最大峰"为归一化基准（排除紧贴边界 0/255 的堆积柱），
+            使主要分布的峰顶满纵轴，分布形状清晰饱满；
+          - 超过 1.0 的边界堆积柱裁剪到 1.0。
+        （测试图背景为大面积灰度0，加噪后在0处堆积，若直接按全局最大值归一化会把
+          中间的主峰压得很矮，故采用此归一化方式以便观察分布形状）
+        """
+        cnt = np.histogram(np.clip(h, 0, 255), bins=bins, range=(0, 256))[0].astype(np.float64)
+        inner_max = cnt[2:-2].max()
+        base = inner_max if inner_max > 0 else cnt.max()
+        return np.clip(cnt / base, 0, 1.0)
+
     for k in range(4):
         axes[0, k].imshow(imgs[k], cmap='gray', vmin=0, vmax=255)
-        axes[0, k].set_title(names[k])
+        axes[0, k].set_title(names[k], color='white')
         axes[0, k].axis('off')
 
-        # 下排：对应的灰度直方图
-        axes[1, k].bar(range(256), hist_list[k], width=1.0, color='steelblue')
-        axes[1, k].set_title(f'Histogram - {names[k]}')
+        # 下排：对应的灰度直方图（64 个 bin 归一化后柱状绘制，黑底白柱、峰值顶满）
+        hn = _norm_hist(imgs[k])
+        bw = 256.0 / len(hn)                       # 每个柱对应的灰度宽度
+        axes[1, k].bar(np.arange(len(hn)) * bw + bw / 2, hn, width=bw * 0.9, color='white')
+        axes[1, k].set_title(f'Histogram - {names[k]}', color='white', fontsize=11)
         axes[1, k].set_xlim(0, 255)
+        axes[1, k].set_ylim(0, 1.05)               # 峰值顶到顶部
+        axes[1, k].set_facecolor('black')          # 黑色背景
+        axes[1, k].tick_params(colors='white', labelsize=8)
+        axes[1, k].set_ylabel('normalized count', color='white', fontsize=9)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'exp5_1_noise_hist.png'), dpi=100)
+    plt.savefig(os.path.join(output_dir, 'exp5_1_noise_hist.png'), dpi=100, facecolor='black')
     plt.show()
 
     # ==================== 5-2-1 自适应中值滤波 vs 7×7 中值滤波 ====================
