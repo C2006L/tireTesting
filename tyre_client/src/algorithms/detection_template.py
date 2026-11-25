@@ -22,9 +22,18 @@ import time
 import numpy as np
 from typing import Dict, List, Tuple, Any, Optional
 
-# 确保可以导入同目录下的 debris 模块（算法实现）
+# 确保可以导入同目录下的 debris / crack 模块（算法实现）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import debris
+
+# ============================================================
+# 【算法切换开关】可指定：
+#   'auto'   = 自动（默认）：按图像类型自动选择——横长的胎冠图用裂纹检测、方形的胎侧图用杂物检测
+#   'debris' = 强制实验6：胎侧杂物检测
+#   'crack'  = 强制实验8：胎冠裂纹检测
+# 也可用环境变量覆盖：set TYRE_ALGO=crack （PowerShell: $env:TYRE_ALGO="crack"）
+# ============================================================
+ALGORITHM = os.environ.get('TYRE_ALGO', 'auto')
 
 
 class TyreDefectDetector:
@@ -34,7 +43,11 @@ class TyreDefectDetector:
         """初始化检测器"""
         self.model = None
         self.config = self.load_config()
-        print("[检测器] 初始化完成（胎侧杂物检测算法）")
+        self.algorithm = ALGORITHM                     # auto / debris / crack
+        self._last_algo = None                         # 记录本次实际使用的算法
+        name = {'debris': '胎侧杂物检测(实验6)',
+                'crack': '胎冠裂纹检测(实验8)'}.get(self.algorithm, '自动选择(auto)')
+        print(f"[检测器] 初始化完成（当前算法：{name}）")
 
     def load_config(self) -> Dict[str, Any]:
         """加载配置参数"""
@@ -113,6 +126,21 @@ class TyreDefectDetector:
         t0 = time.time()
         p = self.config['detect']
         try:
+            # 决定本次使用的算法：auto 时按图像形状自动选择
+            #   胎冠图（横长，宽 > 1.2×高，如 1024×768）→ 裂纹检测（实验8）
+            #   胎侧图（近方形，如 480×480）→ 杂物检测（实验6）
+            algo = self.algorithm
+            if algo == 'auto':
+                h, w = image.shape[:2]
+                algo = 'crack' if w > 1.2 * h else 'debris'
+                print(f"[检测器] 自动选择算法：{algo}（图像尺寸 {w}x{h}）")
+            self._last_algo = algo                     # 记录本次实际使用的算法
+
+            # 若为实验8（胎冠裂纹检测），转交裂纹检测分支
+            if algo == 'crack':
+                return self._detect_crack(image, t0)
+
+            # ===== 以下为实验6：胎侧杂物检测 =====
             # 1) 黑帽变换：抑制帘线条纹、凸显比背景暗的小斑缺陷
             response = debris.black_hat(image, p['bg_size']).astype(np.float64)
 
@@ -165,6 +193,44 @@ class TyreDefectDetector:
             return {'has_defect': False, 'defects': [], 'confidence': 0.0, 'error': str(e)}
 
     # ------------------------------------------------------------------
+    # 实验8：胎冠裂纹检测分支（Radon 变换 + 线密度投影）
+    # ------------------------------------------------------------------
+    def _detect_crack(self, image: np.ndarray, t0: float) -> Dict[str, Any]:
+        """
+        胎冠裂纹检测（实验8）：输入为灰度图像，用 Radon 变换 + 线密度投影找细长直线裂纹，
+        结果转换为系统缺陷格式（额外保存 'line' 直线两端点，供后处理画线）。
+        """
+        try:
+            import crack
+            cracks, _ = crack.detect_crack(image)
+            defects = []
+            for c in cracks:
+                if not c.get('has_crack', True):
+                    continue                             # 未检出裂纹，不计入缺陷
+                (x1, y1), (x2, y2) = c['p1'], c['p2']
+                bx = int(max(0, min(x1, x2)))
+                by = int(max(0, min(y1, y2)))
+                bw = int(abs(x2 - x1)) + 1
+                bh = int(abs(y2 - y1)) + 1
+                defects.append({
+                    'type': '裂纹',
+                    'confidence': float(min(1.0, c['score'] / 20.0)),
+                    'location': {'x': bx, 'y': by, 'width': bw, 'height': bh},
+                    'severity': '严重',
+                    'line': (c['p1'], c['p2']),      # 直线两端点（用于画线）
+                })
+            print(f"[检测器] 执行胎冠裂纹检测：检测到 {len(defects)} 条裂纹")
+            return {
+                'has_defect': len(defects) > 0,
+                'defects': defects,
+                'confidence': max([d['confidence'] for d in defects], default=1.0),
+                'processing_time': time.time() - t0,
+            }
+        except Exception as e:
+            print(f"[错误] 裂纹检测失败: {e}")
+            return {'has_defect': False, 'defects': [], 'confidence': 0.0, 'error': str(e)}
+
+    # ------------------------------------------------------------------
     # 核心方法 4：结果后处理
     # ------------------------------------------------------------------
     def postprocess_result(self, image: np.ndarray,
@@ -173,15 +239,23 @@ class TyreDefectDetector:
         try:
             result_image = image.copy()
 
-            # 在图像上标记检测到的缺陷（复用 debris 的矩形框绘制函数）
+            # 在图像上标记检测到的缺陷：裂纹画直线、杂物画矩形框
             if detection_result.get('has_defect'):
-                regions = []
-                for d in detection_result['defects']:
-                    loc = d['location']
-                    regions.append({'bbox': (loc['x'], loc['y'],
-                                             loc['x'] + loc['width'] - 1,
-                                             loc['y'] + loc['height'] - 1)})
-                result_image = debris.draw_defects(result_image, regions)
+                line_defs = [d for d in detection_result['defects'] if 'line' in d]
+                box_defs = [d for d in detection_result['defects'] if 'line' not in d]
+                if line_defs:
+                    import crack
+                    result_image = crack.draw_crack_lines(
+                        result_image,
+                        [{'p1': d['line'][0], 'p2': d['line'][1]} for d in line_defs])
+                if box_defs:
+                    regions = []
+                    for d in box_defs:
+                        loc = d['location']
+                        regions.append({'bbox': (loc['x'], loc['y'],
+                                                 loc['x'] + loc['width'] - 1,
+                                                 loc['y'] + loc['height'] - 1)})
+                    result_image = debris.draw_defects(result_image, regions)
 
             # 生成检测信息（result: 0=不通过, 1=通过, 2=检测失败）
             detection_info = self.generate_detection_info(detection_result)
@@ -204,6 +278,7 @@ class TyreDefectDetector:
 
     def generate_detection_info(self, detection_result: Dict[str, Any]) -> Dict[str, Any]:
         """生成检测信息"""
+        is_crack = (getattr(self, '_last_algo', self.algorithm) == 'crack')
         if detection_result.get('has_defect'):
             defect_list = []
             for i, defect in enumerate(detection_result['defects']):
@@ -213,7 +288,8 @@ class TyreDefectDetector:
             info = {
                 'result': 0,                      # 0=不通过
                 'message': '检测不通过',
-                'details': '发现胎侧杂物缺陷:\n' + '\n'.join(defect_list),
+                'details': (('发现胎冠裂纹:\n' if is_crack
+                             else '发现胎侧杂物缺陷:\n') + '\n'.join(defect_list)),
                 'confidence': detection_result['confidence'],
                 'defect_count': len(detection_result['defects'])
             }
@@ -221,7 +297,7 @@ class TyreDefectDetector:
             info = {
                 'result': 1,                      # 1=通过
                 'message': '检测通过',
-                'details': '未检测到胎侧杂物缺陷',
+                'details': ('未检测到胎冠裂纹' if is_crack else '未检测到胎侧杂物缺陷'),
                 'confidence': detection_result.get('confidence', 1.0),
                 'defect_count': 0
             }
